@@ -1,7 +1,10 @@
+
 import cv2
 from colorama import Fore, Style, init
 
 from vision.camera import Camera
+from vision.perception import Perception
+from vision.detector import TestDetector
 
 
 init(autoreset=True)
@@ -44,7 +47,6 @@ def main():
     print(
         f"{Fore.MAGENTA}"
         "╔══════════════════════════════════════╗"
-        "╗"
     )
     print(
         f"{Fore.MAGENTA}"
@@ -60,18 +62,37 @@ def main():
 
     camera = Camera()
 
+    perception = Perception()
+    perception.add_detector(TestDetector())
+
     try:
         log_info("Starting camera...")
         camera.start()
 
         log_success("Camera initialized")
         log_info("Resolution: 1280x720")
-        log_info("Vision pipeline: READY")
+
+        log_info("Initializing perception system...")
+        log_success("Perception system initialized")
+
+        log_info("Loading detectors...")
+        log_success("Test detector loaded")
+
+        log_success("Vision pipeline: READY")
         log_info("Press Q to exit")
         print()
 
         while True:
             frame = camera.read()
+
+            detections = perception.process(frame)
+
+            for detection in detections:
+                log_info(
+                    f"{detection.label} "
+                    f"({detection.confidence:.2f}) "
+                    f"[{detection.source}]"
+                )
 
             cv2.imshow("CYN-X Vision", frame)
 
@@ -84,9 +105,14 @@ def main():
         log_error(str(error))
 
     finally:
+        log_info("Shutting down perception system...")
+        log_success("Perception system stopped")
+
         log_info("Shutting down camera...")
         camera.stop()
+
         cv2.destroyAllWindows()
+
         log_success("Vision subsystem stopped")
 
 
