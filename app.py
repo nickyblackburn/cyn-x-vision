@@ -5,12 +5,15 @@ from colorama import Fore, Style, init
 from vision.camera import Camera
 from vision.perception import Perception
 from vision.detector import TestDetector
+from vision.yolo_detector import YOLODetector
 
 
 init(autoreset=True)
 
 
 def log_info(message):
+    
+    
     print(
         f"{Fore.CYAN}[CYN-X-VISION]{Style.RESET_ALL} "
         f"{Fore.GREEN}INFO{Style.RESET_ALL} "
@@ -63,23 +66,22 @@ def main():
     camera = Camera()
 
     perception = Perception()
-    perception.add_detector(TestDetector())
+
+    yolo = YOLODetector()
+
+    perception.add_detector(yolo)
 
     try:
         log_info("Starting camera...")
         camera.start()
 
-        log_success("Camera initialized")
-        log_info("Resolution: 1280x720")
-
         log_info("Initializing perception system...")
         log_success("Perception system initialized")
 
-        log_info("Loading detectors...")
-        log_success("Test detector loaded")
+        log_info("Loading YOLO detector...")
+        log_success("YOLO detector loaded")
 
         log_success("Vision pipeline: READY")
-        log_info("Press Q to exit")
         print()
 
         while True:
@@ -88,10 +90,32 @@ def main():
             detections = perception.process(frame)
 
             for detection in detections:
-                log_info(
+                x1 = detection.bbox[0]
+                y1 = detection.bbox[1]
+                x2 = detection.bbox[2]
+                y2 = detection.bbox[3]
+
+                cv2.rectangle(
+                    frame,
+                    (x1, y1),
+                    (x2, y2),
+                    (255, 0, 255),
+                    2,
+                )
+
+                label = (
                     f"{detection.label} "
-                    f"({detection.confidence:.2f}) "
-                    f"[{detection.source}]"
+                    f"{detection.confidence:.0%}"
+                )
+
+                cv2.putText(
+                    frame,
+                    label,
+                    (x1, max(y1 - 10, 20)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 0, 255),
+                    2,
                 )
 
             cv2.imshow("CYN-X Vision", frame)
