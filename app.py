@@ -2,6 +2,7 @@
 import cv2
 from colorama import Fore, Style, init
 
+from vision import WeedPenDetector
 from vision.camera import Camera
 from vision.perception import Perception
 from vision.detector import TestDetector
@@ -12,6 +13,7 @@ init(autoreset=True)
 
 
 def log_info(message):
+    
     
     
     print(
@@ -70,6 +72,10 @@ def main():
     yolo = YOLODetector()
 
     perception.add_detector(yolo)
+
+    perception.add_detector(
+    WeedPenDetector.WeedPenDetector()
+)
 
     try:
         log_info("Starting camera...")
