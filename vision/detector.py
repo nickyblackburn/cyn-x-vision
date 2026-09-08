@@ -13,3 +13,13 @@ class Detector(ABC):
     @abstractmethod
     def detect(self, frame) -> list[Detection]:
         pass
+
+
+class TestDetector(Detector):
+
+    @property
+    def name(self):
+        return "test"
+
+    def detect(self, frame) -> list[Detection]:
+        return []
