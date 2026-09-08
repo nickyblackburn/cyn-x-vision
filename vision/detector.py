@@ -1,0 +1,15 @@
+from abc import ABC, abstractmethod
+
+from vision.detection import Detection
+
+
+class Detector(ABC):
+
+    @property
+    @abstractmethod
+    def name(self):
+        pass
+
+    @abstractmethod
+    def detect(self, frame) -> list[Detection]:
+        pass
