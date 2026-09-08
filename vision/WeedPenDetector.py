@@ -20,17 +20,27 @@ class WeedPenDetector(Detector):
     def name(self) -> str:
         return "weed_pen"
 
-    # PUT THE NEW CODE HERE
     def detect(self, frame):
         detections = []
 
         results = self.model.predict(
             source=frame,
-            conf=0.01,
+            conf=0.15,
             verbose=False,
         )
 
+        print(
+            f"[CYN-X-VISION] Custom YOLO returned "
+            f"{len(results)} result(s)"
+        )
+
         for result in results:
+
+            print(
+                f"[CYN-X-VISION] Custom YOLO found "
+                f"{len(result.boxes)} box(es)"
+            )
+
             for box in result.boxes:
 
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
@@ -38,9 +48,11 @@ class WeedPenDetector(Detector):
                 class_id = int(box.cls[0])
 
                 print(
-                    f"[CYN-X-VISION] YOLO: "
+                    f"[CYN-X-VISION] "
                     f"class={class_id} "
-                    f"confidence={confidence:.3f}"
+                    f"confidence={confidence:.3f} "
+                    f"box=({int(x1)}, {int(y1)}, "
+                    f"{int(x2)}, {int(y2)})"
                 )
 
                 detections.append(
