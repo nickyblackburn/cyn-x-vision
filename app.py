@@ -9,7 +9,7 @@ init(autoreset=True)
 
 def log_info(message):
     print(
-        f"{Fore.CYAN}[CYN-X]{Style.RESET_ALL} "
+        f"{Fore.CYAN}[CYN-X-VISION]{Style.RESET_ALL} "
         f"{Fore.GREEN}INFO{Style.RESET_ALL} "
         f"{message}"
     )
@@ -17,7 +17,7 @@ def log_info(message):
 
 def log_success(message):
     print(
-        f"{Fore.CYAN}[CYN-X]{Style.RESET_ALL} "
+        f"{Fore.CYAN}[CYN-X-VISION]{Style.RESET_ALL} "
         f"{Fore.GREEN}✓{Style.RESET_ALL} "
         f"{Fore.WHITE}{message}"
     )
@@ -25,7 +25,7 @@ def log_success(message):
 
 def log_warning(message):
     print(
-        f"{Fore.CYAN}[CYN-X]{Style.RESET_ALL} "
+        f"{Fore.CYAN}[CYN-X-VISION]{Style.RESET_ALL} "
         f"{Fore.YELLOW}⚠{Style.RESET_ALL} "
         f"{message}"
     )
@@ -33,7 +33,7 @@ def log_warning(message):
 
 def log_error(message):
     print(
-        f"{Fore.CYAN}[CYN-X]{Style.RESET_ALL} "
+        f"{Fore.CYAN}[CYN-X-VISION]{Style.RESET_ALL} "
         f"{Fore.RED}✗{Style.RESET_ALL} "
         f"{message}"
     )
