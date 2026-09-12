@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>CYN-X Vision</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #0b0b0f;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+
+        header {
+            padding: 20px 30px;
+            border-bottom: 1px solid #292933;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        header p {
+            margin: 6px 0 0;
+            color: #9999a8;
+        }
+
+        main {
+            padding: 25px;
+            max-width: 1400px;
+            margin: auto;
+        }
+
+        .camera {
+            background: #111118;
+            border: 1px solid #292933;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .camera img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .panel {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: #111118;
+            border: 1px solid #292933;
+            border-radius: 10px;
+            padding: 15px 20px;
+            min-width: 150px;
+        }
+
+        .label {
+            color: #9999a8;
+            font-size: 13px;
+        }
+
+        .value {
+            margin-top: 5px;
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .online {
+            color: #4ade80;
+        }
+
+        .offline {
+            color: #f87171;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>👁️ CYN-X Vision</h1>
+    <p>Computer vision subsystem</p>
+</header>
+
+<main>
+
+    <div class="camera">
+        <img src="/video" alt="CYN-X Vision Camera">
+    </div>
+
+    <div class="panel">
+
+        <div class="card">
+            <div class="label">SYSTEM</div>
+            <div
+                id="status"
+                class="value"
+            >
+                Starting...
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="label">FPS</div>
+            <div
+                id="fps"
+                class="value"
+            >
+                0
+            </div>
+        </div>
+
+    </div>
+
+</main>
+
+<script>
+
+async function updateStatus() {
+
+    try {
+
+        const response = await fetch("/status");
+
+        const data = await response.json();
+
+        const status = document.getElementById("status");
+        const fps = document.getElementById("fps");
+
+        fps.textContent = data.fps;
+
+        if (data.running) {
+
+            status.textContent = "ONLINE";
+            status.className = "value online";
+
+        } else {
+
+            status.textContent = "OFFLINE";
+            status.className = "value offline";
+
+        }
+
+    } catch (error) {
+
+        document.getElementById("status").textContent = "ERROR";
+
+    }
+
+}
+
+setInterval(updateStatus, 1000);
+
+updateStatus();
+
+</script>
+
+</body>
+
+</html>
