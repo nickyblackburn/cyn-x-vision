@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -16,6 +17,56 @@ IMAGE_EXTENSIONS = {
 }
 
 
+# ============================================================
+# HELPERS
+# ============================================================
+
+def is_negative_image(image_path: Path) -> bool:
+    """
+    Return True when the filename identifies a known
+    negative training image.
+
+    Examples:
+
+        negative_00001.jpg
+        negative_00002.jpg
+        negative-00003.jpg
+
+    Negative images NEVER go through YOLO.
+    """
+
+    name = image_path.stem.lower()
+
+    return name.startswith(
+        (
+            "negative_",
+            "negative-",
+        )
+    )
+
+
+def clear_directory(directory: Path) -> None:
+    """
+    Completely remove a directory and recreate it.
+
+    This is intentionally used only for generated
+    classifications/review output.
+    """
+
+    if directory.exists():
+
+        print(
+            f"[CLEANUP] Clearing: {directory}"
+        )
+
+        shutil.rmtree(directory)
+
+    directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+
 def yolo_box(
     x1,
     y1,
@@ -24,7 +75,10 @@ def yolo_box(
     img_w,
     img_h,
 ):
-    """Convert pixel coordinates to normalized YOLO format."""
+    """
+    Convert pixel coordinates into normalized
+    YOLO format.
+    """
 
     x_center = ((x1 + x2) / 2) / img_w
     y_center = ((y1 + y2) / 2) / img_h
@@ -40,25 +94,98 @@ def yolo_box(
     )
 
 
+def create_empty_label(
+    label_path: Path,
+) -> None:
+    """
+    Create an empty YOLO label file.
+
+    Empty label means:
+
+        This image contains ZERO weed_pen objects.
+    """
+
+    label_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    label_path.write_text(
+        "",
+        encoding="utf-8",
+    )
+
+
+def copy_image(
+    source_path: Path,
+    destination_path: Path,
+) -> None:
+    """
+    Copy an image while normalizing it to RGB JPEG.
+    """
+
+    destination_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with Image.open(
+        source_path
+    ) as image:
+
+        image = image.convert(
+            "RGB"
+        )
+
+        image.save(
+            destination_path,
+            quality=95,
+        )
+
+
 def draw_boxes(
-    image_path,
+    image_path: Path,
     detections,
-    output_path,
-):
-    """Create a visual preview of predicted boxes."""
+    output_path: Path,
+) -> None:
+    """
+    Create a visual review image with predicted boxes.
+    """
 
-    image = Image.open(
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with Image.open(
         image_path
-    ).convert("RGB")
+    ) as source:
 
-    draw = ImageDraw.Draw(image)
+        image = source.convert(
+            "RGB"
+        )
+
+    draw = ImageDraw.Draw(
+        image
+    )
 
     for detection in detections:
 
-        x1, y1, x2, y2, confidence = detection
+        (
+            x1,
+            y1,
+            x2,
+            y2,
+            confidence,
+        ) = detection
 
         draw.rectangle(
-            [x1, y1, x2, y2],
+            [
+                x1,
+                y1,
+                x2,
+                y2,
+            ],
             outline="red",
             width=4,
         )
@@ -68,7 +195,6 @@ def draw_boxes(
             f"{confidence:.2f}"
         )
 
-        # Label background
         text_top = max(
             0,
             y1 - 25,
@@ -102,35 +228,16 @@ def draw_boxes(
     )
 
 
-def create_empty_label(label_path):
-    """
-    Create an empty YOLO label file.
-
-    An empty label means:
-
-        This image contains NO weed_pen.
-
-    This should only be called after a human confirms
-    that an image is genuinely negative.
-    """
-
-    label_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    label_path.write_text(
-        "",
-        encoding="utf-8",
-    )
-
+# ============================================================
+# MAIN
+# ============================================================
 
 def main():
 
     parser = argparse.ArgumentParser(
         description=(
-            "CYN-X Vision automatic "
-            "YOLO labeling tool."
+            "CYN-X Vision YOLO automatic "
+            "labeling tool."
         )
     )
 
@@ -147,27 +254,27 @@ def main():
     parser.add_argument(
         "--images",
         default="dataset/organized",
-        help="Directory containing images.",
+        help="Directory containing organized images.",
     )
 
     parser.add_argument(
         "--labels",
         default="dataset/labels",
-        help="Directory containing YOLO labels.",
+        help="Directory for YOLO labels.",
     )
 
     parser.add_argument(
         "--preview",
         default="dataset/review",
-        help="Directory for review images.",
+        help="Directory for positive review images.",
     )
 
     parser.add_argument(
         "--negative-review",
         default="dataset/negative_review",
         help=(
-            "Directory for images with "
-            "no model detection."
+            "Directory for positive images "
+            "where YOLO finds nothing."
         ),
     )
 
@@ -186,8 +293,8 @@ def main():
         type=float,
         default=0.50,
         help=(
-            "Minimum confidence for "
-            "a detection to be reviewed."
+            "Minimum confidence required "
+            "to send a detection to review."
         ),
     )
 
@@ -198,18 +305,11 @@ def main():
         help="YOLO inference image size.",
     )
 
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help=(
-            "Allow existing labels to be "
-            "overwritten. DO NOT use this "
-            "for human-created labels unless "
-            "you intentionally want to replace them."
-        ),
-    )
-
     args = parser.parse_args()
+
+    # ========================================================
+    # PATHS
+    # ========================================================
 
     model_path = Path(
         args.model
@@ -232,14 +332,17 @@ def main():
     )
 
     # ========================================================
-    # CHECK PATHS
+    # CHECK REQUIRED PATHS
     # ========================================================
 
     if not model_path.exists():
 
         print(
-            f"[ERROR] Model not found: "
-            f"{model_path}"
+            f"[ERROR] Model not found:"
+        )
+
+        print(
+            f"        {model_path}"
         )
 
         return
@@ -247,79 +350,97 @@ def main():
     if not image_dir.exists():
 
         print(
-            f"[ERROR] Image directory not found: "
-            f"{image_dir}"
+            f"[ERROR] Image directory not found:"
+        )
+
+        print(
+            f"        {image_dir}"
         )
 
         return
-
-    label_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    preview_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    negative_review_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
 
     # ========================================================
     # STARTUP
     # ========================================================
 
-    print("=" * 60)
+    print()
+    print("=" * 70)
     print(
-        "          CYN-X VISION AUTO LABELER"
+        "              CYN-X VISION AUTO LABELER"
     )
-    print("=" * 60)
+    print("=" * 70)
     print()
 
     print(
-        f"[MODEL]            {model_path}"
-    )
-
-    print(
-        f"[IMAGES]           {image_dir}"
-    )
-
-    print(
-        f"[LABELS]           {label_dir}"
-    )
-
-    print(
-        f"[REVIEW]           {preview_dir}"
-    )
-
-    print(
-        f"[NEGATIVE REVIEW]  {negative_review_dir}"
-    )
-
-    print(
-        f"[AUTO CONFIDENCE]  {args.confidence}"
-    )
-
-    print(
-        f"[REVIEW CONFIDENCE] {args.review_confidence}"
+        "[INFO] Starting fresh labeling pass."
     )
 
     print()
 
     # ========================================================
-    # LOAD MODEL
+    # CLEAR OLD CLASSIFICATIONS
     # ========================================================
 
-    print("[MODEL] Loading YOLO model...")
-
-    model = YOLO(
-        str(model_path)
+    print(
+        "[CLEANUP] Removing old classifications..."
     )
 
-    print("[MODEL] Model loaded.")
+    clear_directory(
+        label_dir
+    )
+
+    clear_directory(
+        preview_dir
+    )
+
+    clear_directory(
+        negative_review_dir
+    )
+
+    print()
+
+    print(
+        "[CLEANUP] Old classifications cleared."
+    )
+
+    print(
+        "[CLEANUP] Organized images were NOT touched."
+    )
+
+    print()
+
+    # ========================================================
+    # CONFIGURATION
+    # ========================================================
+
+    print(
+        f"[MODEL]             {model_path}"
+    )
+
+    print(
+        f"[IMAGES]            {image_dir}"
+    )
+
+    print(
+        f"[LABELS]            {label_dir}"
+    )
+
+    print(
+        f"[REVIEW]            {preview_dir}"
+    )
+
+    print(
+        f"[NO DETECTION]      {negative_review_dir}"
+    )
+
+    print(
+        f"[AUTO CONFIDENCE]   {args.confidence:.2f}"
+    )
+
+    print(
+        f"[REVIEW CONFIDENCE] {args.review_confidence:.2f}"
+    )
+
     print()
 
     # ========================================================
@@ -334,8 +455,61 @@ def main():
         in IMAGE_EXTENSIONS
     )
 
+    if not images:
+
+        print(
+            "[ERROR] No images found."
+        )
+
+        return
+
     print(
         f"[INFO] Found {len(images)} images."
+    )
+
+    print()
+
+    # ========================================================
+    # COUNT DATASET TYPES
+    # ========================================================
+
+    expected_negative_count = sum(
+        1
+        for image in images
+        if is_negative_image(image)
+    )
+
+    expected_positive_count = (
+        len(images)
+        - expected_negative_count
+    )
+
+    print(
+        f"[DATASET] Positive images: "
+        f"{expected_positive_count}"
+    )
+
+    print(
+        f"[DATASET] Negative images: "
+        f"{expected_negative_count}"
+    )
+
+    print()
+
+    # ========================================================
+    # LOAD MODEL
+    # ========================================================
+
+    print(
+        "[MODEL] Loading YOLO model..."
+    )
+
+    model = YOLO(
+        str(model_path)
+    )
+
+    print(
+        "[MODEL] Model loaded."
     )
 
     print()
@@ -345,10 +519,16 @@ def main():
     # ========================================================
 
     total = 0
-    skipped_existing = 0
+
+    positive_images = 0
+    negative_images = 0
+
+    negative_labels_created = 0
+
     auto_labeled = 0
     needs_review = 0
     no_detection = 0
+
     errors = 0
 
     # ========================================================
@@ -369,23 +549,53 @@ def main():
             / f"{image_path.stem}.txt"
         )
 
-        # ----------------------------------------------------
-        # PROTECT EXISTING LABELS
-        # ----------------------------------------------------
+        is_negative = (
+            is_negative_image(
+                image_path
+            )
+        )
 
-        if (
-            label_path.exists()
-            and not args.overwrite
-        ):
+        # ====================================================
+        # NEGATIVE IMAGE
+        # ====================================================
 
-            skipped_existing += 1
+        if is_negative:
+
+            negative_images += 1
 
             print(
-                "    [SKIP] Existing label "
-                "protected."
+                "    [TYPE] NEGATIVE"
+            )
+
+            print(
+                "    [YOLO] SKIPPED"
+            )
+
+            create_empty_label(
+                label_path
+            )
+
+            negative_labels_created += 1
+
+            print(
+                "    [LABEL] Empty label created."
+            )
+
+            print(
+                "    [OK] Negative registered."
             )
 
             continue
+
+        # ====================================================
+        # POSITIVE IMAGE
+        # ====================================================
+
+        positive_images += 1
+
+        print(
+            "    [TYPE] POSITIVE"
+        )
 
         try:
 
@@ -397,11 +607,17 @@ def main():
                 image_path
             ) as image:
 
-                img_w, img_h = image.size
+                img_w, img_h = (
+                    image.size
+                )
 
             # ------------------------------------------------
             # YOLO INFERENCE
             # ------------------------------------------------
+
+            print(
+                "    [YOLO] Running inference..."
+            )
 
             results = model.predict(
                 source=str(image_path),
@@ -413,7 +629,12 @@ def main():
             result = results[0]
 
             detections = []
+
             accepted_boxes = []
+
+            # ------------------------------------------------
+            # READ DETECTIONS
+            # ------------------------------------------------
 
             if result.boxes is not None:
 
@@ -427,14 +648,16 @@ def main():
                         box.xyxy[0].tolist()
                     )
 
+                    detection = (
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        confidence,
+                    )
+
                     detections.append(
-                        (
-                            x1,
-                            y1,
-                            x2,
-                            y2,
-                            confidence,
-                        )
+                        detection
                     )
 
                     if (
@@ -443,13 +666,7 @@ def main():
                     ):
 
                         accepted_boxes.append(
-                            (
-                                x1,
-                                y1,
-                                x2,
-                                y2,
-                                confidence,
-                            )
+                            detection
                         )
 
             # =================================================
@@ -464,19 +681,23 @@ def main():
                     encoding="utf-8",
                 ) as file:
 
-                    for (
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        confidence,
-                    ) in accepted_boxes:
+                    for detection in (
+                        accepted_boxes
+                    ):
+
+                        (
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                            confidence,
+                        ) = detection
 
                         (
                             xc,
                             yc,
-                            w,
-                            h,
+                            width,
+                            height,
                         ) = yolo_box(
                             x1,
                             y1,
@@ -492,8 +713,8 @@ def main():
                             f"0 "
                             f"{xc:.6f} "
                             f"{yc:.6f} "
-                            f"{w:.6f} "
-                            f"{h:.6f}\n"
+                            f"{width:.6f} "
+                            f"{height:.6f}\n"
                         )
 
                 auto_labeled += 1
@@ -510,10 +731,9 @@ def main():
                 )
 
                 print(
-                    f"    [OK] "
+                    f"    [AUTO-LABEL] "
                     f"{len(accepted_boxes)} "
-                    f"high-confidence "
-                    f"box(es)"
+                    f"high-confidence box(es)."
                 )
 
             # =================================================
@@ -536,9 +756,8 @@ def main():
                 needs_review += 1
 
                 print(
-                    "    [REVIEW] Detection "
-                    "below auto-label "
-                    "threshold."
+                    "    [REVIEW] Detection found "
+                    "below auto-label threshold."
                 )
 
             # =================================================
@@ -549,39 +768,26 @@ def main():
 
                 no_detection += 1
 
-                # --------------------------------------------
-                # IMPORTANT:
-                #
-                # We DO NOT create an empty label here.
-                #
-                # A failed detection does NOT automatically
-                # mean the image is a valid negative example.
-                #
-                # Human review must confirm it first.
-                # --------------------------------------------
-
-                negative_path = (
+                review_path = (
                     negative_review_dir
                     / image_path.name
                 )
 
-                # Copy image for human review.
-                image_copy = Image.open(
-                    image_path
-                ).convert("RGB")
-
-                image_copy.save(
-                    negative_path,
-                    quality=95,
+                copy_image(
+                    image_path,
+                    review_path,
                 )
 
                 print(
-                    "    [NONE] No detection."
+                    "    [NONE] No weed_pen detected."
                 )
 
                 print(
-                    "    [NEGATIVE REVIEW] "
-                    "Human confirmation required."
+                    "    [REVIEW] Human review required."
+                )
+
+                print(
+                    "    [NOTE] No label created."
                 )
 
         except Exception as error:
@@ -597,65 +803,104 @@ def main():
     # ========================================================
 
     print()
-    print("=" * 60)
+    print()
+    print("=" * 70)
     print(
-        "                 SUMMARY"
+        "                         SUMMARY"
     )
-    print("=" * 60)
+    print("=" * 70)
+    print()
 
     print(
-        f"Images processed:       {total}"
-    )
-
-    print(
-        f"Existing labels skipped: {skipped_existing}"
+        f"Images found:              {total}"
     )
 
     print(
-        f"Automatically labeled:   {auto_labeled}"
+        f"Positive images:           {positive_images}"
     )
 
     print(
-        f"Needs review:            {needs_review}"
-    )
-
-    print(
-        f"No detection:            {no_detection}"
-    )
-
-    print(
-        f"Errors:                   {errors}"
+        f"Negative images:           {negative_images}"
     )
 
     print()
 
     print(
-        f"Labels:           {label_dir}"
+        f"Negative labels created:   "
+        f"{negative_labels_created}"
     )
 
     print(
-        f"Detection review: {preview_dir}"
+        f"Automatically labeled:     "
+        f"{auto_labeled}"
     )
 
     print(
-        f"Negative review:   {negative_review_dir}"
+        f"Positive images to review: "
+        f"{needs_review}"
+    )
+
+    print(
+        f"Positive no detection:     "
+        f"{no_detection}"
+    )
+
+    print(
+        f"Errors:                    "
+        f"{errors}"
     )
 
     print()
 
     print(
-        "IMPORTANT:"
+        "[OUTPUT]"
     )
 
     print(
-        "Images in negative_review need "
-        "human confirmation before receiving "
-        "an empty YOLO label."
+        f"  Labels:          {label_dir}"
+    )
+
+    print(
+        f"  Review:          {preview_dir}"
+    )
+
+    print(
+        f"  No detection:    {negative_review_dir}"
     )
 
     print()
-    print("Done.")
 
+    print("=" * 70)
+    print(
+        "                         DONE"
+    )
+    print("=" * 70)
+    print()
+
+    print(
+        "Dataset rules:"
+    )
+
+    print(
+        "  negative_*  -> NO YOLO -> EMPTY .txt"
+    )
+
+    print(
+        "  weed_pen_*  -> YOLO -> AUTO LABEL / REVIEW"
+    )
+
+    print()
+
+    print(
+        "Old classifications were cleared before processing."
+    )
+
+    print(
+        "Organized images were preserved."
+    )
+
+    print()
+    
 
 if __name__ == "__main__":
     main()
