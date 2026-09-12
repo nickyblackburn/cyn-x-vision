@@ -2,8 +2,8 @@
 """
 CYN-X Vision - Image Organizer / Normalizer
 
-Converts collected images into a consistent JPEG dataset suitable
-for YOLO training.
+Normalizes collected images into JPEG while preserving
+positive/negative dataset identities.
 
 Input:
     dataset/images/
@@ -12,20 +12,25 @@ Output:
     dataset/organized/
         weed_pen_00001.jpg
         weed_pen_00002.jpg
-        ...
-
-    dataset/rejected/
-        corrupted_or_invalid_images
+        negative_00001.jpg
+        negative_00002.jpg
 
 Features:
     - Converts PNG/WebP/BMP/TIFF/GIF/JPEG -> JPEG
     - Converts images to RGB
-    - Handles images with transparency
-    - Removes exact duplicates using SHA-256
+    - Handles transparency
+    - Removes exact duplicates
     - Rejects corrupted images
     - Rejects images below minimum dimensions
-    - Creates consistent filenames
-    - Does NOT modify the original images
+    - PRESERVES positive/negative filename stems
+    - Does NOT modify original images
+
+IMPORTANT:
+    weed_pen_XXXXX -> positive
+    negative_XXXXX -> negative
+
+The filename stem is preserved so YOLO label files remain
+matched to the correct image.
 """
 
 from __future__ import annotations
@@ -57,12 +62,7 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def image_hash(image: Image.Image) -> str:
-    """
-    Create a normalized pixel hash.
-
-    This catches duplicates even when the same image was downloaded
-    in different formats.
-    """
+    """Create a normalized pixel hash."""
 
     image = image.convert("RGB")
 
@@ -73,16 +73,20 @@ def image_hash(image: Image.Image) -> str:
         format="PNG",
     )
 
-    return sha256_bytes(buffer.getvalue())
+    return sha256_bytes(
+        buffer.getvalue()
+    )
 
 
 def flatten_transparency(
     image: Image.Image,
-    background: tuple[int, int, int] = (255, 255, 255),
+    background: tuple[int, int, int] = (
+        255,
+        255,
+        255,
+    ),
 ) -> Image.Image:
-    """
-    Convert transparent images to RGB using a white background.
-    """
+    """Convert transparent images to RGB."""
 
     if image.mode in ("RGBA", "LA"):
 
@@ -94,9 +98,13 @@ def flatten_transparency(
             background + (255,),
         )
 
-        background_image.alpha_composite(rgba)
+        background_image.alpha_composite(
+            rgba
+        )
 
-        return background_image.convert("RGB")
+        return background_image.convert(
+            "RGB"
+        )
 
     if image.mode == "P":
 
@@ -110,9 +118,13 @@ def flatten_transparency(
                 background + (255,),
             )
 
-            background_image.alpha_composite(rgba)
+            background_image.alpha_composite(
+                rgba
+            )
 
-            return background_image.convert("RGB")
+            return background_image.convert(
+                "RGB"
+            )
 
     return image.convert("RGB")
 
@@ -124,29 +136,18 @@ def process_image(
     min_height: int,
     jpeg_quality: int,
 ) -> tuple[bool, str, int, int]:
-    """
-    Convert one image to JPEG.
-
-    Returns:
-
-        success
-        reason
-        width
-        height
-    """
 
     try:
 
         with Image.open(source) as image:
 
-            # Correct EXIF rotation.
-            image = ImageOps.exif_transpose(image)
+            image = ImageOps.exif_transpose(
+                image
+            )
 
             width, height = image.size
 
-            # Reject tiny images.
             if width < min_width:
-
                 return (
                     False,
                     "too_small",
@@ -155,7 +156,6 @@ def process_image(
                 )
 
             if height < min_height:
-
                 return (
                     False,
                     "too_small",
@@ -163,13 +163,17 @@ def process_image(
                     height,
                 )
 
-            # GIFs may contain multiple frames.
-            # For dataset purposes, use the first frame.
-            if getattr(image, "is_animated", False):
+            if getattr(
+                image,
+                "is_animated",
+                False,
+            ):
 
                 image.seek(0)
 
-            image = flatten_transparency(image)
+            image = flatten_transparency(
+                image
+            )
 
             destination.parent.mkdir(
                 parents=True,
@@ -205,11 +209,36 @@ def process_image(
         )
 
 
+def get_category(
+    filename: str,
+) -> str:
+    """
+    Determine dataset category from filename.
+
+    weed_pen_XXXXX -> positive
+    negative_XXXXX -> negative
+
+    Unknown names are treated as positive for compatibility
+    with the original dataset.
+    """
+
+    name = filename.lower()
+
+    if name.startswith("negative_"):
+        return "negative"
+
+    if name.startswith("negative-"):
+        return "negative"
+
+    return "positive"
+
+
 def main() -> None:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Normalize CYN-X Vision images into JPEG."
+            "Normalize CYN-X Vision images "
+            "while preserving dataset categories."
         )
     )
 
@@ -258,7 +287,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # ---------------------------------------------------------
-    # Validate arguments
+    # Validate
     # ---------------------------------------------------------
 
     if not args.input.exists():
@@ -266,10 +295,6 @@ def main() -> None:
         print(
             f"[ERROR] Input directory does not exist:"
             f"\n        {args.input}"
-        )
-
-        print(
-            "\nRun the scraper first or provide --input."
         )
 
         return
@@ -283,7 +308,7 @@ def main() -> None:
         return
 
     # ---------------------------------------------------------
-    # Create directories
+    # Directories
     # ---------------------------------------------------------
 
     args.output.mkdir(
@@ -297,7 +322,7 @@ def main() -> None:
     )
 
     # ---------------------------------------------------------
-    # Find images
+    # Find files
     # ---------------------------------------------------------
 
     files = [
@@ -316,12 +341,32 @@ def main() -> None:
     print("=" * 60)
     print(" CYN-X VISION IMAGE ORGANIZER")
     print("=" * 60)
-    print(f"Input       : {args.input}")
-    print(f"Output      : {args.output}")
-    print(f"Rejected    : {args.rejected}")
-    print(f"Images found: {len(files)}")
-    print(f"Min size    : {args.min_width}x{args.min_height}")
-    print(f"JPEG quality: {args.quality}")
+
+    print(
+        f"Input       : {args.input}"
+    )
+
+    print(
+        f"Output      : {args.output}"
+    )
+
+    print(
+        f"Rejected    : {args.rejected}"
+    )
+
+    print(
+        f"Images found: {len(files)}"
+    )
+
+    print(
+        f"Min size    : "
+        f"{args.min_width}x{args.min_height}"
+    )
+
+    print(
+        f"JPEG quality: {args.quality}"
+    )
+
     print("=" * 60)
     print()
 
@@ -337,7 +382,9 @@ def main() -> None:
     # Statistics
     # ---------------------------------------------------------
 
-    converted = 0
+    positive_count = 0
+    negative_count = 0
+
     duplicates = 0
     rejected = 0
     errors = 0
@@ -350,22 +397,46 @@ def main() -> None:
 
     for source in files:
 
+        category = get_category(
+            source.name
+        )
+
         try:
 
-            # Read image once to calculate normalized pixel hash.
+            # ---------------------------------------------
+            # Read and normalize for duplicate detection
+            # ---------------------------------------------
+
             with Image.open(source) as image:
 
-                image = ImageOps.exif_transpose(image)
+                image = ImageOps.exif_transpose(
+                    image
+                )
 
-                if getattr(image, "is_animated", False):
+                if getattr(
+                    image,
+                    "is_animated",
+                    False,
+                ):
 
                     image.seek(0)
 
-                normalized = flatten_transparency(image)
+                normalized = (
+                    flatten_transparency(
+                        image
+                    )
+                )
 
-                width, height = normalized.size
+                width, height = (
+                    normalized.size
+                )
+
+                # -----------------------------------------
+                # Size check
+                # -----------------------------------------
 
                 if width < args.min_width:
+
                     rejected += 1
 
                     destination = (
@@ -379,13 +450,15 @@ def main() -> None:
                     )
 
                     print(
-                        f"[REJECT] {source.name}"
-                        f" - too small"
+                        f"[REJECT] "
+                        f"{source.name} "
+                        f"- too small"
                     )
 
                     continue
 
                 if height < args.min_height:
+
                     rejected += 1
 
                     destination = (
@@ -399,13 +472,20 @@ def main() -> None:
                     )
 
                     print(
-                        f"[REJECT] {source.name}"
-                        f" - too small"
+                        f"[REJECT] "
+                        f"{source.name} "
+                        f"- too small"
                     )
 
                     continue
 
-                digest = image_hash(normalized)
+                # -----------------------------------------
+                # Duplicate detection
+                # -----------------------------------------
+
+                digest = image_hash(
+                    normalized
+                )
 
                 if digest in seen_hashes:
 
@@ -418,7 +498,9 @@ def main() -> None:
 
                     continue
 
-                seen_hashes.add(digest)
+                seen_hashes.add(
+                    digest
+                )
 
         except (
             UnidentifiedImageError,
@@ -445,30 +527,52 @@ def main() -> None:
                 pass
 
             print(
-                f"[REJECT] {source.name}"
-                f" - corrupted/unreadable"
+                f"[REJECT] "
+                f"{source.name} "
+                f"- corrupted/unreadable"
             )
 
             continue
 
         # -----------------------------------------------------
-        # Create sequential filename
+        # Preserve original filename stem
         # -----------------------------------------------------
 
         filename = (
-            f"weed_pen_{converted + 1:05d}.jpg"
+            f"{source.stem}.jpg"
         )
 
         destination = (
-            args.output / filename
+            args.output
+            / filename
         )
 
-        success, reason, width, height = process_image(
-            source=source,
-            destination=destination,
-            min_width=args.min_width,
-            min_height=args.min_height,
-            jpeg_quality=args.quality,
+        # -----------------------------------------------------
+        # Avoid accidental overwrite
+        # -----------------------------------------------------
+
+        if destination.exists():
+
+            print(
+                f"[SKIP] "
+                f"{filename} "
+                f"- already organized"
+            )
+
+            continue
+
+        # -----------------------------------------------------
+        # Convert
+        # -----------------------------------------------------
+
+        success, reason, width, height = (
+            process_image(
+                source=source,
+                destination=destination,
+                min_width=args.min_width,
+                min_height=args.min_height,
+                jpeg_quality=args.quality,
+            )
         )
 
         if not success:
@@ -476,19 +580,36 @@ def main() -> None:
             rejected += 1
 
             print(
-                f"[REJECT] {source.name}"
-                f" - {reason}"
+                f"[REJECT] "
+                f"{source.name} "
+                f"- {reason}"
             )
 
             continue
 
-        converted += 1
+        # -----------------------------------------------------
+        # Count category
+        # -----------------------------------------------------
 
-        print(
-            f"[{converted:04d}] "
-            f"{filename} "
-            f"({width}x{height})"
-        )
+        if category == "negative":
+
+            negative_count += 1
+
+            print(
+                f"[NEGATIVE] "
+                f"{filename} "
+                f"({width}x{height})"
+            )
+
+        else:
+
+            positive_count += 1
+
+            print(
+                f"[POSITIVE] "
+                f"{filename} "
+                f"({width}x{height})"
+            )
 
     # ---------------------------------------------------------
     # Summary
@@ -498,12 +619,40 @@ def main() -> None:
     print("=" * 60)
     print(" ORGANIZATION COMPLETE")
     print("=" * 60)
-    print(f"Converted    : {converted}")
-    print(f"Duplicates   : {duplicates}")
-    print(f"Rejected     : {rejected}")
-    print(f"Errors       : {errors}")
-    print(f"Output       : {args.output}")
-    print(f"Rejected dir : {args.rejected}")
+
+    print(
+        f"Positive images : {positive_count}"
+    )
+
+    print(
+        f"Negative images : {negative_count}"
+    )
+
+    print(
+        f"Total organized : "
+        f"{positive_count + negative_count}"
+    )
+
+    print(
+        f"Duplicates      : {duplicates}"
+    )
+
+    print(
+        f"Rejected        : {rejected}"
+    )
+
+    print(
+        f"Errors          : {errors}"
+    )
+
+    print(
+        f"Output          : {args.output}"
+    )
+
+    print(
+        f"Rejected dir    : {args.rejected}"
+    )
+
     print("=" * 60)
 
 

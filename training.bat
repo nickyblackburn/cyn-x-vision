@@ -28,7 +28,7 @@ REM ------------------------------------------
 REM Scrape new images
 REM ------------------------------------------
 echo [2/6] Scraping images...
-python .\tools\dataset_scraper.py --count 100 --out dataset
+python tools\dataset_scraper.py --count 100 --out dataset
 
 if errorlevel 1 (
     echo.
@@ -43,7 +43,7 @@ REM ------------------------------------------
 REM Organize / normalize images
 REM ------------------------------------------
 echo [3/6] Organizing images...
-python .\tools\organize_images.py
+python tools\organize_images.py
 
 if errorlevel 1 (
     echo.
