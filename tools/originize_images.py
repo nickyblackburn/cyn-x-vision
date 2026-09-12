@@ -15,22 +15,19 @@ Output:
         negative_00001.jpg
         negative_00002.jpg
 
-Features:
-    - Converts PNG/WebP/BMP/TIFF/GIF/JPEG -> JPEG
-    - Converts images to RGB
-    - Handles transparency
-    - Removes exact duplicates
-    - Rejects corrupted images
-    - Rejects images below minimum dimensions
-    - PRESERVES positive/negative filename stems
-    - Does NOT modify original images
+    dataset/rejected/
 
 IMPORTANT:
-    weed_pen_XXXXX -> positive
-    negative_XXXXX -> negative
+    Every run clears:
+        dataset/organized/
+        dataset/rejected/
 
-The filename stem is preserved so YOLO label files remain
-matched to the correct image.
+    It does NOT clear:
+        dataset/images/
+        dataset/labels/
+
+This prevents old organized images from contaminating
+a fresh dataset while protecting existing labels.
 """
 
 from __future__ import annotations
@@ -209,17 +206,12 @@ def process_image(
         )
 
 
-def get_category(
-    filename: str,
-) -> str:
+def get_category(filename: str) -> str:
     """
     Determine dataset category from filename.
 
     weed_pen_XXXXX -> positive
     negative_XXXXX -> negative
-
-    Unknown names are treated as positive for compatibility
-    with the original dataset.
     """
 
     name = filename.lower()
@@ -230,7 +222,23 @@ def get_category(
     if name.startswith("negative-"):
         return "negative"
 
+    # Backwards compatibility:
+    # Anything not explicitly negative is positive.
     return "positive"
+
+
+def clear_directory(directory: Path) -> None:
+    """Completely remove a directory if it exists."""
+
+    if directory.exists():
+
+        print(
+            f"[CLEANUP] Removing old: {directory}"
+        )
+
+        shutil.rmtree(
+            directory
+        )
 
 
 def main() -> None:
@@ -297,6 +305,10 @@ def main() -> None:
             f"\n        {args.input}"
         )
 
+        print(
+            "\nRun the scraper first."
+        )
+
         return
 
     if not 1 <= args.quality <= 100:
@@ -308,7 +320,63 @@ def main() -> None:
         return
 
     # ---------------------------------------------------------
-    # Directories
+    # SAFETY CHECK
+    # ---------------------------------------------------------
+
+    # Never allow the cleanup to accidentally delete
+    # the source image directory.
+
+    if args.output.resolve() == args.input.resolve():
+
+        print(
+            "[ERROR] Output directory cannot "
+            "be the same as input."
+        )
+
+        return
+
+    if args.rejected.resolve() == args.input.resolve():
+
+        print(
+            "[ERROR] Rejected directory cannot "
+            "be the same as input."
+        )
+
+        return
+
+    # ---------------------------------------------------------
+    # CLEAR OLD DATA
+    # ---------------------------------------------------------
+
+    print()
+    print("=" * 60)
+    print(" CYN-X VISION DATASET CLEANUP")
+    print("=" * 60)
+    print()
+
+    clear_directory(
+        args.output
+    )
+
+    clear_directory(
+        args.rejected
+    )
+
+    print()
+    print(
+        "[CLEANUP] Old organized/rejected "
+        "images cleared."
+    )
+
+    print(
+        "[CLEANUP] Original scraped images "
+        "were NOT touched."
+    )
+
+    print()
+
+    # ---------------------------------------------------------
+    # Create fresh directories
     # ---------------------------------------------------------
 
     args.output.mkdir(
@@ -322,7 +390,7 @@ def main() -> None:
     )
 
     # ---------------------------------------------------------
-    # Find files
+    # Find images
     # ---------------------------------------------------------
 
     files = [
@@ -337,7 +405,6 @@ def main() -> None:
 
     files.sort()
 
-    print()
     print("=" * 60)
     print(" CYN-X VISION IMAGE ORGANIZER")
     print("=" * 60)
@@ -404,7 +471,7 @@ def main() -> None:
         try:
 
             # ---------------------------------------------
-            # Read and normalize for duplicate detection
+            # Read image
             # ---------------------------------------------
 
             with Image.open(source) as image:
@@ -535,7 +602,7 @@ def main() -> None:
             continue
 
         # -----------------------------------------------------
-        # Preserve original filename stem
+        # Preserve filename
         # -----------------------------------------------------
 
         filename = (
@@ -546,20 +613,6 @@ def main() -> None:
             args.output
             / filename
         )
-
-        # -----------------------------------------------------
-        # Avoid accidental overwrite
-        # -----------------------------------------------------
-
-        if destination.exists():
-
-            print(
-                f"[SKIP] "
-                f"{filename} "
-                f"- already organized"
-            )
-
-            continue
 
         # -----------------------------------------------------
         # Convert
