@@ -1,0 +1,116 @@
+# ==============================
+# CYN-X Vision
+# ==============================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Python tooling ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- CYN-X Vision datasets ----
+# Raw scraped images
+dataset/images/
+
+# Organized/normalized images
+dataset/organized/
+
+# Rejected images
+dataset/rejected/
+
+# Human/auto generated YOLO labels
+dataset/labels/
+
+# Generated YOLO training dataset
+dataset/yolo/
+
+# Dataset metadata
+dataset/metadata.csv
+
+# ---- YOLO / Ultralytics ----
+runs/
+runs/**
+
+# Trained model weights
+*.pt
+*.onnx
+*.engine
+*.torchscript
+*.mlmodel
+
+# Model exports / checkpoints
+weights/
+checkpoints/
+
+# ---- Vision output ----
+predictions/
+detections/
+review/
+outputs/
+results/
+
+# ---- Camera / temporary files ----
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.bmp
+*.gif
+
+# Keep explicitly tracked example assets if desired
+# !assets/examples/*.png
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- Temporary files ----
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ---- Windows ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---- VS Code ----
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# ---- PyCharm ----
+.idea/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- OS files ----
+.DS_Store
+
+# ---- Ultralytics settings ----
+Ultralytics/
