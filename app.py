@@ -71,7 +71,7 @@ def main():
 
     yolo = YOLODetector()
 
-    #perception.add_detector(yolo)
+    perception.add_detector(yolo)
 
     perception.add_detector(
     WeedPenDetector.WeedPenDetector()
